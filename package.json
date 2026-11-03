@@ -1,0 +1,22 @@
+{
+  "name": "zoth-swarm-multiplexer",
+  "version": "1.0.0",
+  "description": "Autonomous Multi-Agent Swarm Orchestration, SSE Telemetry, and Workstation Dashboard",
+  "main": "electron/main.cjs",
+  "bin": {
+    "zoth-swarm": "./bin/zoth-swarm.js",
+    "swarm-multiplexer": "./bin/zoth-swarm.js"
+  },
+  "scripts": {
+    "start": "electron .",
+    "desktop": "electron .",
+    "web": "node bin/zoth-swarm.js web",
+    "cli": "node bin/zoth-swarm.js",
+    "test": "pytest tests/"
+  },
+  "author": "Zoth Core Intelligence",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^34.5.8"
+  }
+}

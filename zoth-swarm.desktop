@@ -1,0 +1,20 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=Zoth Swarm Multiplexer
+GenericName=Autonomous Multi-Agent Telemetry & Command Workstation
+Comment=21-Agent Swarm Topology, Real-Time SSE Telemetry, Model Hot-Swapping & Dual CLI Console
+Exec=/usr/local/bin/zoth-swarm desktop
+Icon=/opt/f2fdda77-178b-4603-ae80-c7aa4cd97908/zoth-micro-repos/zoth-swarm-multiplexer/assets/icon.png
+Terminal=false
+Categories=Development;System;Network;Utility;
+StartupNotify=true
+Actions=CLI;Web;
+
+[Desktop Action CLI]
+Name=Open Swarm CLI
+Exec=x-terminal-emulator -e "/usr/local/bin/zoth-swarm --help"
+
+[Desktop Action Web]
+Name=Open Web UI (Port 8989)
+Exec=/usr/local/bin/zoth-swarm web

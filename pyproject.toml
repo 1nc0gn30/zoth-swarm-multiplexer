@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "zoth-swarm-multiplexer"
+version = "1.0.0"
+description = "Zoth Swarm Multiplexer — 21-Agent Sovereign Terminal Multiplexer & Universal Harness Daemon"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = []
+
+[project.scripts]
+zoth-swarm = "swarm_cli:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
