@@ -473,6 +473,7 @@
         <div class="status-dot"></div>
         <span id="daemon-status-text">DAEMON // LOOPBACK :8141</span>
       </div>
+      <button class="btn" style="background: linear-gradient(135deg, #FFB800, #F59E0B); color: #000; font-weight: 800; border: none; box-shadow: 0 0 16px rgba(255,184,0,0.4);" onclick="openTutorial()">✨ Quick Tutorial</button>
       <button class="btn btn-secondary" onclick="syncAllMemories()">🧠 Sync STDP Synapses</button>
       <button class="btn btn-secondary" onclick="exportTranscript()">📜 Export Logs</button>
       <button id="themeToggleBtn" class="btn btn-secondary" onclick="document.documentElement.setAttribute('data-theme', document.documentElement.getAttribute('data-theme')==='light'?'dark':'light')">☀ Light / Dark</button>
@@ -836,9 +837,136 @@
       } catch(e) {}
     }
 
+    
+    // Kid-Friendly Tutorial Logic & Braille Dither Animation
+    let brailleAnimInterval = null;
+    let bayerTick = 0;
+
+    function renderBrailleWave() {
+      const el = document.getElementById('tutorialBrailleCanvas');
+      if (!el) return;
+      bayerTick += 0.15;
+      const W = 36, H = 8;
+      let out = '';
+      for (let y = 0; y < H; y++) {
+        for (let x = 0; x < W; x++) {
+          let mask = 0;
+          const dots = [
+            [0,0,0x01],[0,1,0x02],[0,2,0x04],[0,3,0x40],
+            [1,0,0x08],[1,1,0x10],[1,2,0x20],[1,3,0x80]
+          ];
+          for (let d = 0; d < 8; d++) {
+            const px = x * 2 + dots[d][0];
+            const py = y * 4 + dots[d][1];
+            const v = Math.sin(px * 0.18 + bayerTick) * Math.cos(py * 0.3 + bayerTick);
+            if (v > 0.05) mask |= dots[d][2];
+          }
+          out += String.fromCharCode(0x2800 | mask);
+        }
+        out += "\n";
+      }
+      el.textContent = out;
+    }
+
+    function openTutorial() {
+      const m = document.getElementById('tutorialModal');
+      if (m) {
+        m.style.display = 'flex';
+        if (!brailleAnimInterval) {
+          brailleAnimInterval = setInterval(renderBrailleWave, 60);
+        }
+      }
+    }
+
+    function closeTutorial() {
+      const m = document.getElementById('tutorialModal');
+      if (m) m.style.display = 'none';
+      if (brailleAnimInterval) {
+        clearInterval(brailleAnimInterval);
+        brailleAnimInterval = null;
+      }
+      const chk = document.getElementById('dontShowTutorialAgain');
+      if (chk && chk.checked) {
+        localStorage.setItem('zoth_swarm_multiplexer_tutorial_seen', 'true');
+      }
+    }
+
+    // Auto-open on first visit
+    window.addEventListener('DOMContentLoaded', () => {
+      if (!localStorage.getItem('zoth_swarm_multiplexer_tutorial_seen')) {
+        setTimeout(openTutorial, 600);
+      }
+    });
+
     // Initial render
     renderGrid();
     connectSSE();
   </script>
+<!-- Kid-Friendly & Clean Quick Tutorial Modal -->
+<div id="tutorialModal" style="display:none; position:fixed; inset:0; z-index:99999; background:rgba(4,6,12,0.85); backdrop-filter:blur(14px); align-items:center; justify-content:center; padding:20px;">
+  <div style="background:#0F1322; border:2px solid #FFB800; border-radius:20px; max-width:680px; width:100%; max-height:90vh; overflow-y:auto; box-shadow:0 24px 60px rgba(0,0,0,0.8), 0 0 40px rgba(255,184,0,0.25); padding:32px; color:#F8FAFC; position:relative; font-family:'JetBrains Mono', ui-monospace, sans-serif;">
+    
+    <button onclick="closeTutorial()" style="position:absolute; top:20px; right:20px; background:rgba(255,255,255,0.08); border:1px solid rgba(255,255,255,0.2); color:#F8FAFC; width:36px; height:36px; border-radius:50%; font-size:18px; cursor:pointer; font-weight:bold; display:flex; align-items:center; justify-content:center;">✕</button>
+
+    <div style="display:flex; align-items:center; gap:14px; margin-bottom:16px;">
+      <span style="font-size:38px;">🤖⚡</span>
+      <div>
+        <h2 style="margin:0; font-size:24px; font-weight:800; color:#FFB800; font-family:'Cinzel', serif;">How To Command Your 21-Agent Swarm!</h2>
+        <p style="margin:4px 0 0; color:#94A3B8; font-size:12px;">Kid-friendly guide · Zero setup required</p>
+      </div>
+    </div>
+
+    <!-- Live ASCII / Braille Magic Stage -->
+    <div style="background:#05070D; border:1px solid rgba(255,184,0,0.3); border-radius:12px; padding:12px; margin-bottom:24px; text-align:center; overflow:hidden;">
+      <pre id="tutorialBrailleCanvas" style="font-size:10px; line-height:10px; color:#38BDF8; margin:0; font-family:monospace; white-space:pre;"></pre>
+    </div>
+
+    <div style="display:flex; flex-direction:column; gap:16px;">
+      
+      <!-- Step 1 -->
+      <div style="display:flex; gap:14px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:12px; padding:16px;">
+        <span style="font-size:28px;">🎮</span>
+        <div>
+          <h4 style="margin:0 0 6px; color:#FFB800; font-size:15px;">Step 1: Meet Your 21 AI Companions</h4>
+          <p style="margin:0; color:#CBD5E1; font-size:13px; line-height:1.5;">
+            Think of each agent as a different specialist on your crew! Some love <strong>Code</strong> (fixing bugs), some love <strong>Security</strong> (protecting your computer), and some love <strong>Creative</strong> (making art and music).
+          </p>
+        </div>
+      </div>
+
+      <!-- Step 2 -->
+      <div style="display:flex; gap:14px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:12px; padding:16px;">
+        <span style="font-size:28px;">📢</span>
+        <div>
+          <h4 style="margin:0 0 6px; color:#38BDF8; font-size:15px;">Step 2: Use the Global Megaphone</h4>
+          <p style="margin:0; color:#CBD5E1; font-size:13px; line-height:1.5;">
+            Type a command in the big gold bar at the top (like <code>status</code> or <code>ls</code>) and hit <strong>Broadcast</strong>! All 21 agents will hear you at the exact same millisecond.
+          </p>
+        </div>
+      </div>
+
+      <!-- Step 3 -->
+      <div style="display:flex; gap:14px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:12px; padding:16px;">
+        <span style="font-size:28px;">🛡️</span>
+        <div>
+          <h4 style="margin:0 0 6px; color:#34D399; font-size:15px;">Step 3: 100% Safe & Private</h4>
+          <p style="margin:0; color:#CBD5E1; font-size:13px; line-height:1.5;">
+            Everything stays right here on your computer! No cloud spying, no hidden fees, and no signups ever. You are in total control.
+          </p>
+        </div>
+      </div>
+
+    </div>
+
+    <div style="margin-top:24px; display:flex; justify-content:space-between; align-items:center; pt:16px; border-top:1px solid rgba(255,255,255,0.1);">
+      <label style="display:flex; align-items:center; gap:8px; font-size:12px; color:#94A3B8; cursor:pointer;">
+        <input type="checkbox" id="dontShowTutorialAgain" style="cursor:pointer;"> Don't show automatically on first visit
+      </label>
+      <button onclick="closeTutorial()" style="background:#FFB800; color:#000; border:none; padding:10px 24px; border-radius:999px; font-weight:800; font-size:13px; cursor:pointer;">Got It, Let's Play! 🚀</button>
+    </div>
+
+  </div>
+</div>
+
 </body>
 </html>
