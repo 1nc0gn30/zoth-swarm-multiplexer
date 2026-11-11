@@ -782,7 +782,7 @@
     }
 
     function changePwd(agentId) {
-      const newPath = prompt(`Set working directory for ${agentId}:`, "/opt/f2fdda77-178b-4603-ae80-c7aa4cd97908");
+      const newPath = prompt(`Set working directory for ${agentId}:`, "~/projects");
       if (newPath) {
         const agent = PANTHEON_AGENTS.find(a => a.id === agentId);
         if (agent) {
