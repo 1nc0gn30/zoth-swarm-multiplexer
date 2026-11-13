@@ -890,12 +890,12 @@
       }
     }
 
-    // Auto-open on first visit
-    window.addEventListener('DOMContentLoaded', () => {
-      if (!localStorage.getItem('zoth_swarm_multiplexer_tutorial_seen')) {
-        setTimeout(openTutorial, 600);
-      }
-    });
+    // Auto-open disabled: user opens tutorial explicitly via header button
+    // window.addEventListener('DOMContentLoaded', () => {
+    //   if (!localStorage.getItem('zoth_swarm_multiplexer_tutorial_seen')) {
+    //     setTimeout(openTutorial, 600);
+    //   }
+    // });
 
     // Initial render
     renderGrid();
