@@ -14,15 +14,20 @@ Supports:
 """
 
 import os
+import re
+import pty
 import sys
 import json
 import time
+import select
+import shutil
 import socket
 import argparse
 import threading
 import subprocess
 from datetime import datetime, timezone
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from pathlib import Path
+from http.server import HTTPServer, ThreadingHTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 
 DEFAULT_PORT = 8141
@@ -246,24 +251,116 @@ PANTHEON_AGENTS = [
 CADRES = ["All", "Architects", "Code", "Security", "Creative", "Swarm"]
 
 AVAILABLE_HARNESSES = [
-    {"id": "hermes-agent", "name": "Hermes Agent", "icon": "🐲"},
     {"id": "agy", "name": "Antigravity (Agy)", "icon": "🐺"},
+    {"id": "hermes-agent", "name": "Hermes Agent", "icon": "🐲"},
     {"id": "codex", "name": "OpenAI Codex CLI", "icon": "🤖"},
     {"id": "claude-code", "name": "Claude Code CLI", "icon": "🦊"},
     {"id": "opencode", "name": "OpenCode CLI", "icon": "⚡"},
     {"id": "ollama", "name": "Ollama Local Ring-0", "icon": "🦙"},
 ]
 
-AVAILABLE_MODELS = [
-    "claude-3-7-sonnet",
-    "claude-3-5-sonnet",
-    "deepseek-r1:70b",
-    "qwen2.5-coder:32b",
-    "llama3.3:70b",
-    "hermes-3:70b",
-    "gpt-4.5",
-    "gemini-2.5-pro",
+AGY_MODELS = [
+    {"id": "claude-opus-5-5-high", "label": "Claude Opus 5.5 (High)"},
+    {"id": "claude-opus-5-5-medium", "label": "Claude Opus 5.5 (Medium)"},
+    {"id": "claude-opus-5-5-low", "label": "Claude Opus 5.5 (Low)"},
+    {"id": "claude-sonnet-5-5-high", "label": "Claude Sonnet 5.5 (High)"},
+    {"id": "claude-sonnet-5-5-medium", "label": "Claude Sonnet 5.5 (Medium)"},
+    {"id": "claude-sonnet-5-5-low", "label": "Claude Sonnet 5.5 (Low)"},
+    {"id": "gemini-4-hydrogen-xhigh", "label": "Gemini 4 Hydrogen (XHigh)"},
+    {"id": "gemini-4-hydrogen-high", "label": "Gemini 4 Hydrogen (High)"},
+    {"id": "gemini-4-hydrogen-medium", "label": "Gemini 4 Hydrogen (Medium)"},
+    {"id": "gemini-4-hydrogen-low", "label": "Gemini 4 Hydrogen (Low)"},
+    {"id": "gemini-4-neon-xhigh", "label": "Gemini 4 Neon (XHigh)"},
+    {"id": "gemini-4-neon-high", "label": "Gemini 4 Neon (High)"},
+    {"id": "gemini-4-neon-medium", "label": "Gemini 4 Neon (Medium)"},
+    {"id": "gemini-4-neon-low", "label": "Gemini 4 Neon (Low)"},
+    {"id": "gemini-4-argon-high", "label": "Gemini 4 Argon (High)"},
+    {"id": "gemini-4-argon-medium", "label": "Gemini 4 Argon (Medium)"},
+    {"id": "gemini-4-argon-low", "label": "Gemini 4 Argon (Low)"},
+    {"id": "gemini-4-carbon-high", "label": "Gemini 4 Carbon (High)"},
+    {"id": "gemini-4-carbon-medium", "label": "Gemini 4 Carbon (Medium)"},
+    {"id": "gemini-4-carbon-low", "label": "Gemini 4 Carbon (Low)"},
+    {"id": "gemini-3.8-flash-high", "label": "Gemini 3.8 Flash (High)"},
+    {"id": "gemini-3.8-flash-medium", "label": "Gemini 3.8 Flash (Medium)"},
+    {"id": "gemini-3.8-flash-low", "label": "Gemini 3.8 Flash (Low)"},
+    {"id": "gemini-pro-orchestrator", "label": "Orchestrator (Carbon)"},
+    {"id": "gemini-pro-orchestrator-argon", "label": "Orchestrator (Argon)"},
+    {"id": "gemini-pro-orchestrator-neon", "label": "Orchestrator (Neon)"},
+    {"id": "gpt-oss-120b-medium", "label": "GPT-OSS 120B (Medium)"},
 ]
+
+HERMES_DEFAULT_MODELS = [
+    {"id": "zoth-fast", "label": "Custom: zoth-fast"},
+    {"id": "hermes3-64k:latest", "label": "Custom: hermes3-64k:latest"},
+    {"id": "deepseek/deepseek-v4-flash-0731", "label": "Custom: deepseek/deepseek-v4-flash-0731"},
+    {"id": "qwen/qwen3-coder-next", "label": "Custom: qwen/qwen3-coder-next"},
+    {"id": "anthropic/claude-haiku-5.5", "label": "Custom: anthropic/claude-haiku-5.5"},
+    {"id": "x-ai/grok-4.7", "label": "Nous Portal: SpaceXAI Grok 4.7"},
+    {"id": "stepfun/step-5-preview", "label": "Nous Portal: StepFun Step 5 Preview"},
+    {"id": "deepseek/deepseek-v4.1-flash:US", "label": "Nous Portal: deepseek-v4.1-flash:US"},
+    {"id": "z-ai/glm-5.3:US", "label": "Nous Portal: z-ai/glm-5.3:US"},
+    {"id": "z-ai/glm-5.3-flash:US", "label": "Nous Portal: z-ai/glm-5.3-flash:US"},
+    {"id": "openai/gpt-6-astra", "label": "Nous Portal: OpenAI GPT-6 Astra"},
+    {"id": "openai/gpt-6-astra-fast", "label": "Nous Portal: OpenAI GPT-6 Astra Fast"},
+    {"id": "openai/gpt-6-astra-flex", "label": "Nous Portal: OpenAI GPT-6 Astra Flex"},
+    {"id": "openai/gpt-6-astra-pro", "label": "Nous Portal: OpenAI GPT-6 Astra Pro"},
+    {"id": "openai/gpt-6-astra-pro-fast", "label": "Nous Portal: OpenAI GPT-6 Astra Pro Fast"},
+    {"id": "openai/gpt-6-astra-pro-flex", "label": "Nous Portal: OpenAI GPT-6 Astra Pro Flex"},
+    {"id": "moonshotai/kimi-k3.1-pro", "label": "Nous Portal: MoonshotAI Kimi K3.1 Pro"},
+    {"id": "minimax/minimax-m3.1-flash", "label": "Nous Portal: MiniMax M3.1 Flash"},
+    {"id": "upstage/solar-mini4:free", "label": "Nous Portal (Free): solar-mini4:free"},
+    {"id": "qwen/qwen4-max:free", "label": "Nous Portal (Free): qwen4-max:free"},
+    {"id": "tencent/hy4-flash:free", "label": "Nous Portal (Free): hy4-flash:free"},
+    {"id": "meituan/longcat-2.5:free", "label": "Nous Portal (Free): longcat-2.5:free"},
+    {"id": "stepfun/step-3.7-flash:free", "label": "Nous Portal (Free): step-3.7-flash:free"},
+]
+
+def get_hermes_models():
+    seen = {}
+    for m in HERMES_DEFAULT_MODELS:
+        seen[m["id"]] = m
+    hermes_dir = Path.home() / ".hermes"
+    # 1. Read Nous Portal recommended cache
+    nous_cache = hermes_dir / "cache" / "nous_recommended_cache.json"
+    if nous_cache.exists():
+        try:
+            data = json.loads(nous_cache.read_text(encoding="utf-8"))
+            portal = data.get("https://portal.nousresearch.com", {}).get("data", {})
+            for key in ("paidRecommendedModels", "freeRecommendedModels"):
+                for item in portal.get(key, []) or []:
+                    if isinstance(item, dict) and item.get("modelName"):
+                        mid = item["modelName"]
+                        disp = item.get("displayName") or mid
+                        prefix = "Nous Portal (Free)" if ":free" in mid or key == "freeRecommendedModels" else "Nous Portal"
+                        seen[mid] = {"id": mid, "label": f"{prefix}: {disp}"}
+        except Exception:
+            pass
+    # 2. Read Hermes profile configs (custom models)
+    for cfg_path in [hermes_dir / "config.yaml", *sorted((hermes_dir / "profiles").glob("*/config.yaml"))]:
+        if cfg_path.exists():
+            try:
+                for line in cfg_path.read_text(encoding="utf-8", errors="ignore").splitlines():
+                    s = line.strip()
+                    if s.startswith("default:"):
+                        val = s.split(":", 1)[1].strip().strip('"').strip("'")
+                        if val and val not in seen:
+                            seen[val] = {"id": val, "label": f"Custom: {val}"}
+            except Exception:
+                pass
+    return list(seen.values())
+
+def get_harness_models():
+    hermes_list = get_hermes_models()
+    return {
+        "agy": AGY_MODELS,
+        "hermes-agent": hermes_list,
+        "codex": [{"id": "gpt-5.3-codex", "label": "gpt-5.3-codex"}, {"id": "o3-pro", "label": "o3-pro"}],
+        "claude-code": [{"id": "claude-opus-4-6", "label": "claude-opus-4-6"}, {"id": "claude-sonnet-4-6", "label": "claude-sonnet-4-6"}],
+        "opencode": [{"id": "deepseek-r1:70b", "label": "deepseek-r1:70b"}, {"id": "qwen2.5-coder:32b", "label": "qwen2.5-coder:32b"}],
+        "ollama": [{"id": "hermes3-64k:latest", "label": "hermes3-64k:latest"}, {"id": "llama3.3:70b", "label": "llama3.3:70b"}, {"id": "qwen2.5-coder:32b", "label": "qwen2.5-coder:32b"}],
+    }
+
+AVAILABLE_MODELS = [m["id"] for m in AGY_MODELS] + [m["id"] for m in HERMES_DEFAULT_MODELS if m["id"] not in {x["id"] for x in AGY_MODELS}]
 
 def get_utc_now():
     return datetime.now(timezone.utc).isoformat()
@@ -315,6 +412,7 @@ class SwarmMultiplexerEngine:
                 "cadres": CADRES,
                 "harnesses": AVAILABLE_HARNESSES,
                 "models": AVAILABLE_MODELS,
+                "harness_models": get_harness_models(),
                 "agents": self.agents,
                 "recent_history": self.history[-30:],
                 "timestamp": get_utc_now()
@@ -435,7 +533,159 @@ class SwarmMultiplexerEngine:
             "success": True,
             "broadcast_cadre": cadre,
             "dispatched_count": len(target_ids),
-            "results": results
+            "results": results,
+        }
+
+    def _strip_ansi(self, text):
+        return re.sub(r'\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])', '', text)
+
+    def _build_pty_cmd(self, harness, model):
+        if harness == "agy":
+            exe = shutil.which("agy") or "/home/zoth/.gemini/antigravity-cli/bin/agy"
+            return [exe, "--model", model]
+        if harness == "hermes-agent":
+            exe = shutil.which("hermes") or "/home/zoth/.local/bin/hermes"
+            return [exe, "--cli", "-m", model]
+        if harness == "codex":
+            exe = shutil.which("codex") or "codex"
+            return [exe, "-m", model]
+        if harness == "claude-code":
+            exe = shutil.which("claude") or "claude"
+            return [exe, "--model", model]
+        if harness == "opencode":
+            exe = shutil.which("opencode") or "opencode"
+            return [exe, "-m", model]
+        if harness == "ollama":
+            exe = shutil.which("ollama") or "ollama"
+            return [exe, "run", model]
+        return [shutil.which("hermes") or "hermes", "--cli", "-m", model]
+
+    def spawn_pty_ducky(self, agent_id, prompt, harness=None, model=None):
+        with self.lock:
+            if agent_id not in self.agents:
+                return {"success": False, "error": f"Agent {agent_id} not found"}
+            agent = self.agents[agent_id]
+            if harness:
+                agent["harness"] = harness
+            if model:
+                agent["model"] = model
+            agent["status"] = "RUNNING"
+            agent["command_count"] += 1
+            agent["last_active"] = get_utc_now()
+            harness = agent["harness"]
+            model = agent["model"]
+            cwd = agent["pwd"] if os.path.exists(agent["pwd"]) else os.getcwd()
+            cmd = self._build_pty_cmd(harness, model)
+
+        def worker():
+            master_fd, slave_fd = pty.openpty()
+            proc = None
+            try:
+                env = {**os.environ, "TERM": "xterm-256color", "COLUMNS": "100", "LINES": "30"}
+                proc = subprocess.Popen(
+                    cmd,
+                    stdin=slave_fd,
+                    stdout=slave_fd,
+                    stderr=slave_fd,
+                    cwd=cwd,
+                    env=env,
+                    close_fds=True,
+                )
+                os.close(slave_fd)
+                slave_fd = -1
+
+                boot_entry = {"type": "system", "time": get_utc_now(), "text": f"[DUCKY:SPAWN] {' '.join(cmd)}"}
+                self._append_and_emit(agent_id, boot_entry)
+
+                # WAIT: let CLI initialize its interactive prompt (up to 2.5s, or 0.6s after first bytes)
+                wait_deadline = time.time() + 2.5
+                got_banner = False
+                while time.time() < wait_deadline:
+                    timeout = 0.6 if got_banner else 0.5
+                    r, _, _ = select.select([master_fd], [], [], timeout)
+                    if r:
+                        try:
+                            chunk = os.read(master_fd, 4096).decode("utf-8", errors="replace")
+                            if chunk:
+                                got_banner = True
+                                clean = self._strip_ansi(chunk).strip()
+                                if clean:
+                                    self._notify_subscribers("stream_chunk", {"agent_id": agent_id, "text": clean})
+                        except OSError:
+                            break
+                    elif got_banner:
+                        break
+
+                # STRING + ENTER (then nothing)
+                self._append_and_emit(agent_id, {"type": "user", "time": get_utc_now(), "text": f"[DUCKY:STRING+ENTER] {prompt}"})
+                os.write(master_fd, (prompt + "\r").encode("utf-8"))
+
+                # STREAM response live
+                stream_deadline = time.time() + 45.0
+                idle_since = None
+                acc = []
+                while time.time() < stream_deadline:
+                    r, _, _ = select.select([master_fd], [], [], 0.35)
+                    if r:
+                        try:
+                            raw = os.read(master_fd, 4096)
+                            if not raw:
+                                break
+                            clean = self._strip_ansi(raw.decode("utf-8", errors="replace"))
+                            if clean.strip():
+                                idle_since = time.time()
+                                acc.append(clean)
+                                self._notify_subscribers("stream_chunk", {"agent_id": agent_id, "text": clean})
+                        except OSError:
+                            break
+                    else:
+                        if proc.poll() is not None:
+                            break
+                        if idle_since and (time.time() - idle_since) > 4.0:
+                            break
+
+                full_out = "".join(acc).strip() or "[PTY stream completed with no printable output]"
+                self._append_and_emit(agent_id, {"type": "assistant", "time": get_utc_now(), "text": full_out})
+            except Exception as e:
+                self._append_and_emit(agent_id, {"type": "system", "time": get_utc_now(), "text": f"[PTY ERROR] {e}"})
+            finally:
+                if slave_fd >= 0:
+                    try: os.close(slave_fd)
+                    except OSError: pass
+                try: os.close(master_fd)
+                except OSError: pass
+                if proc and proc.poll() is None:
+                    try: proc.terminate()
+                    except OSError: pass
+                with self.lock:
+                    if agent_id in self.agents:
+                        self.agents[agent_id]["status"] = "IDLE"
+                self._notify_subscribers("status_change", {"agent_id": agent_id, "status": "IDLE"})
+
+        threading.Thread(target=worker, daemon=True).start()
+        return {"success": True, "agent_id": agent_id, "status": "RUNNING", "mode": "pty_ducky"}
+
+    def _append_and_emit(self, agent_id, entry):
+        with self.lock:
+            if agent_id in self.agents:
+                self.agents[agent_id]["logs"].append(entry)
+        self._notify_subscribers("log", {"agent_id": agent_id, "entry": entry})
+
+    def spawn_pty_broadcast(self, prompt, cadre="All"):
+        with self.lock:
+            target_ids = [
+                aid for aid, ag in self.agents.items()
+                if cadre == "All" or ag["cadre"].lower() == cadre.lower()
+            ]
+        results = []
+        for aid in target_ids:
+            results.append(self.spawn_pty_ducky(aid, prompt))
+        return {
+            "success": True,
+            "cadre": cadre,
+            "mode": "pty_ducky",
+            "dispatched_count": len(target_ids),
+            "results": results,
         }
 
     def switch_harness(self, agent_id, harness):
@@ -594,7 +844,7 @@ class SwarmHTTPHandler(BaseHTTPRequestHandler):
                     # Heartbeat comment to keep alive
                     self.wfile.write(b": ping\n\n")
                     self.wfile.flush()
-            except (BrokenPipeError, ConnectionResetError):
+            except (BrokenPipeError, ConnectionResetError, OSError):
                 self.engine.unsubscribe(on_event)
                 return
 
@@ -632,7 +882,24 @@ class SwarmHTTPHandler(BaseHTTPRequestHandler):
             if not agent_id or not cmd:
                 self._send_json({"error": "agent_id and command are required"}, 400)
                 return
-            res = self.engine.execute_command(agent_id, cmd)
+            if body.get("pty"):
+                res = self.engine.spawn_pty_ducky(agent_id, cmd)
+            else:
+                res = self.engine.execute_command(agent_id, cmd)
+            self._send_json(res, 200 if res.get("success") else 400)
+
+        elif path in ("/pty_spawn", "/api/swarm/pty_spawn"):
+            agent_id = body.get("agent_id") or body.get("agent")
+            prompt = body.get("prompt") or body.get("command") or body.get("cmd", "")
+            if not agent_id or not prompt:
+                self._send_json({"error": "agent_id and prompt are required"}, 400)
+                return
+            res = self.engine.spawn_pty_ducky(
+                agent_id,
+                prompt,
+                harness=body.get("harness"),
+                model=body.get("model"),
+            )
             self._send_json(res, 200 if res.get("success") else 400)
 
         elif path in ("/broadcast", "/api/swarm/broadcast"):
@@ -641,7 +908,19 @@ class SwarmHTTPHandler(BaseHTTPRequestHandler):
             if not cmd:
                 self._send_json({"error": "command is required"}, 400)
                 return
-            res = self.engine.broadcast(cmd, cadre)
+            if body.get("pty"):
+                res = self.engine.spawn_pty_broadcast(cmd, cadre)
+            else:
+                res = self.engine.broadcast(cmd, cadre)
+            self._send_json(res, 200)
+
+        elif path in ("/pty_broadcast", "/api/swarm/pty_broadcast"):
+            prompt = body.get("prompt") or body.get("command") or body.get("cmd", "")
+            cadre = body.get("cadre", "All")
+            if not prompt:
+                self._send_json({"error": "prompt is required"}, 400)
+                return
+            res = self.engine.spawn_pty_broadcast(prompt, cadre)
             self._send_json(res, 200)
 
         elif path in ("/harness", "/api/swarm/harness"):
@@ -690,7 +969,9 @@ def run_server(port=DEFAULT_PORT):
     engine = SwarmMultiplexerEngine()
     SwarmHTTPHandler.engine = engine
     server_address = ("127.0.0.1", port)
-    httpd = HTTPServer(server_address, SwarmHTTPHandler)
+    ThreadingHTTPServer.allow_reuse_address = True
+    httpd = ThreadingHTTPServer(server_address, SwarmHTTPHandler)
+    httpd.daemon_threads = True
     print(f"⚡ Zoth Swarm Multiplexer Daemon active on http://127.0.0.1:{port}")
     print(f"✔ 21 Pantheon Agent nodes initialized.")
     print(f"✔ Real-time SSE stream endpoint: http://127.0.0.1:{port}/stream")

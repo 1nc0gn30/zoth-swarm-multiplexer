@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Zoth Swarm Multiplexer Showcase Stage</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 1920px; height: 1080px; overflow: hidden; background: transparent; }
+  canvas { display: block; width: 1920px; height: 1080px; }
+</style>
+</head>
+<body>
+<canvas id="stage" width="1920" height="1080"></canvas>
+<script type="module">
+import { GHOST_GEO_HIGH, renderGhostSpecimenFrame } from './ghostGeometry.js';
+
+const canvas = document.getElementById('stage');
+const ctx = canvas.getContext('2d');
+
+const clamp01 = (v) => Math.max(0, Math.min(1, v));
+const easeOut = (t) => 1 - Math.pow(1 - clamp01(t), 4);
+const easeInOut = (t) => {
+  const x = clamp01(t);
+  return x < 0.5 ? 4 * x * x * x : 1 - Math.pow(-2 * x + 2, 3) / 2;
+};
+const band = (t, t0, dur) => clamp01((t - t0) / Math.max(0.001, dur));
+
+function roundRect(c, x, y, w, h, r) {
+  c.beginPath();
+  c.moveTo(x + r, y);
+  c.arcTo(x + w, y, x + w, y + h, r);
+  c.arcTo(x + w, y + h, x, y + h, r);
+  c.arcTo(x, y + h, x, y, r);
+  c.arcTo(x, y, x + w, y, r);
+  c.closePath();
+}
+
+function drawBackground(t, accent = '#00d5ff') {
+  ctx.fillStyle = '#05070e';
+  ctx.fillRect(0, 0, 1920, 1080);
+
+  // Radial aurora glow
+  const g1 = ctx.createRadialGradient(960, 480, 40, 960, 520, 920);
+  g1.addColorStop(0, accent === '#ffb800' ? 'rgba(255,184,0,0.13)' : 'rgba(0,213,255,0.14)');
+  g1.addColorStop(0.5, 'rgba(91,61,245,0.08)');
+  g1.addColorStop(1, 'rgba(5,7,14,0)');
+  ctx.fillStyle = g1;
+  ctx.fillRect(0, 0, 1920, 1080);
+
+  // Drifting dot grid
+  const step = 48;
+  const ox = (t * 14) % step;
+  const oy = (t * 9) % step;
+  ctx.fillStyle = 'rgba(148, 163, 184, 0.12)';
+  for (let x = -step + ox; x < 1920 + step; x += step) {
+    for (let y = -step + oy; y < 1080 + step; y += step) {
+      ctx.fillRect(x, y, 2, 2);
+    }
+  }
+
+  // Subtle top/bottom vignette
+  const vg = ctx.createLinearGradient(0, 0, 0, 1080);
+  vg.addColorStop(0, 'rgba(2,4,9,0.55)');
+  vg.addColorStop(0.15, 'rgba(2,4,9,0)');
+  vg.addColorStop(0.85, 'rgba(2,4,9,0)');
+  vg.addColorStop(1, 'rgba(2,4,9,0.65)');
+  ctx.fillStyle = vg;
+  ctx.fillRect(0, 0, 1920, 1080);
+}
+
+function drawPill(x, y, text, color = '#ffb800', alpha = 1) {
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  ctx.font = '700 20px "JetBrains Mono", monospace';
+  const tw = ctx.measureText(text).width;
+  const pw = tw + 36;
+  const ph = 42;
+  roundRect(ctx, x, y, pw, ph, 21);
+  ctx.fillStyle = 'rgba(15, 23, 42, 0.85)';
+  ctx.fill();
+  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = color;
+  ctx.stroke();
+  ctx.fillStyle = color;
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, x + 18, y + ph / 2 + 1);
+  ctx.restore();
+  return pw;
+}
+
+function drawGhostCentered(cx, cy, size, t, opts = {}) {
+  ctx.save();
+  ctx.translate(cx - size / 2, cy - size / 2);
+  renderGhostSpecimenFrame(ctx, {
+    w: size,
+    h: size,
+    t,
+    geo: GHOST_GEO_HIGH,
+    variant: opts.variant || 'hologram',
+    isDark: true,
+    yaw: opts.yaw ?? Math.sin(t * 0.7) * 0.45,
+    pitch: opts.pitch ?? -0.06 + Math.cos(t * 0.5) * 0.05,
+    cursorX: opts.cursorX ?? Math.sin(t * 0.9) * 0.35,
+    cursorY: opts.cursorY ?? Math.cos(t * 0.7) * 0.15,
+    blink: (t % 4.2) > 4.05 ? 1 : 0,
+    assemble: opts.assemble ?? 1,
+    pulse: opts.pulse ?? 0,
+    showRings: opts.showRings ?? true,
+    wireframe: opts.wireframe ?? true,
+    clearCanvas: false,
+  });
+  ctx.restore();
+}
+
+function drawCard(x, y, w, h, title, subtitle, bullets, accent, p) {
+  if (p <= 0.01) return;
+  const e = easeOut(p);
+  ctx.save();
+  ctx.globalAlpha = e;
+  ctx.translate(0, (1 - e) * 28);
+
+  roundRect(ctx, x, y, w, h, 20);
+  ctx.fillStyle = 'rgba(12, 17, 30, 0.92)';
+  ctx.fill();
+  ctx.lineWidth = 1.5;
+  ctx.strokeStyle = accent;
+  ctx.stroke();
+
+  // Accent top bar
+  roundRect(ctx, x + 24, y + 22, 54, 6, 3);
+  ctx.fillStyle = accent;
+  ctx.fill();
+
+  ctx.fillStyle = '#f8fafc';
+  ctx.font = '800 32px "Syne", "Inter", system-ui, sans-serif';
+  ctx.textBaseline = 'top';
+  ctx.fillText(title, x + 26, y + 42);
+
+  ctx.fillStyle = accent;
+  ctx.font = '600 18px "JetBrains Mono", monospace';
+  ctx.fillText(subtitle, x + 26, y + 84);
+
+  ctx.fillStyle = '#cbd5e1';
+  ctx.font = '500 22px "Inter", system-ui, sans-serif';
+  bullets.forEach((b, idx) => {
+    ctx.fillText('•  ' + b, x + 26, y + 128 + idx * 36);
+  });
+
+  ctx.restore();
+}
+
+function renderS1(t, dur) {
+  drawBackground(t, '#00d5ff');
+  const exit = 1 - easeInOut(band(t, dur - 0.55, 0.55));
+  const pAssemble = easeOut(band(t, 0.0, 1.4));
+  const pulse = Math.max(0, 1 - Math.abs(t - 2.6) * 1.4);
+
+  // Ghostbyte 3D Star on Right
+  drawGhostCentered(1410, 520, 740, t, {
+    variant: 'hologram',
+    assemble: pAssemble,
+    pulse,
+    yaw: -0.35 + Math.sin(t * 0.6) * 0.28,
+  });
+
+  ctx.save();
+  ctx.globalAlpha = exit;
+
+  const pPill = easeOut(band(t, 0.15, 0.6));
+  drawPill(110, 180, 'NULLAI.TECH  //  ZERO TO HERO SHOWCASE', '#00d5ff', pPill);
+
+  // Staggered Hero Headline
+  const words = [
+    { txt: 'ONE TERMINAL', color: '#94a3b8', y: 270, t0: 0.35, size: 64 },
+    { txt: 'IS NEVER ENOUGH.', color: '#64748b', y: 348, t0: 0.55, size: 64 },
+    { txt: '21-AGENT SWARM', color: '#ffb800', y: 465, t0: 1.4, size: 92 },
+    { txt: 'MULTIPLEXER.', color: '#f8fafc', y: 572, t0: 1.7, size: 92 },
+  ];
+  words.forEach((w) => {
+    const p = easeOut(band(t, w.t0, 0.75));
+    if (p <= 0) return;
+    ctx.save();
+    ctx.globalAlpha = p * exit;
+    ctx.translate(0, (1 - p) * 34);
+    ctx.fillStyle = w.color;
+    ctx.font = `800 ${w.size}px "Syne", "Inter", system-ui, sans-serif`;
+    ctx.textBaseline = 'top';
+    ctx.fillText(w.txt, 110, w.y);
+    ctx.restore();
+  });
+
+  const pSub = easeOut(band(t, 2.3, 0.8));
+  ctx.save();
+  ctx.globalAlpha = pSub * exit;
+  ctx.fillStyle = '#cbd5e1';
+  ctx.font = '500 28px "Inter", system-ui, sans-serif';
+  ctx.fillText('Starring Ghostbyte 3D  ·  Antigravity (Agy) + Hermes Agent  ·  Live PTY Ducky-Script', 110, 725);
+  ctx.restore();
+
+  const pBadge = easeOut(band(t, 3.0, 0.7));
+  drawPill(110, 800, '127.0.0.1:8141  ·  LOCAL LOOPBACK  ·  ZERO PAYWALLS', '#32ff85', pBadge);
+
+  ctx.restore();
+}
+
+function renderS2(t, dur) {
+  drawBackground(t, '#ffb800');
+  const exit = 1 - easeInOut(band(t, dur - 0.55, 0.55));
+
+  // Ghostbyte 3D on Left
+  drawGhostCentered(360, 560, 580, t, {
+    variant: 'quantum',
+    yaw: 0.35 + Math.sin(t * 0.8) * 0.25,
+    cursorX: 0.45,
+  });
+
+  ctx.save();
+  ctx.globalAlpha = exit;
+
+  drawPill(100, 74, '01 // ARCHITECTURE & AI HARNESSES', '#ffb800', easeOut(band(t, 0.05, 0.5)));
+  ctx.fillStyle = '#f8fafc';
+  ctx.font = '800 58px "Syne", system-ui, sans-serif';
+  ctx.textBaseline = 'top';
+  ctx.fillText('Agy & Hermes First. Every Model Ready.', 100, 138);
+
+  // 4 Bento Cards on Right
+  drawCard(
+    670, 250, 560, 260,
+    '#1 Antigravity (Agy)',
+    '27 FRONTIER MODELS · DEFAULT HARNESS',
+    ['Claude Opus 5.5, Sonnet 4.6, Haiku 4.5', 'Gemini 4 Hydrogen, Gemini 3 Pro / Flash', 'Orchestrator (Carbon) & GPT-5 / o3 / o4-mini'],
+    '#ffb800',
+    band(t, 0.6, 0.7)
+  );
+
+  drawCard(
+    1265, 250, 560, 260,
+    '#2 Hermes Agent',
+    'NOUS PORTAL + CUSTOM MODELS',
+    ['Hermes-4 70B / 405B & DeepHermes-3', 'Custom local GGUF & Nous Portal endpoints', 'Hot-swappable per terminal pane'],
+    '#00d5ff',
+    band(t, 1.4, 0.7)
+  );
+
+  drawCard(
+    670, 545, 560, 260,
+    '+4 Built-In CLI Harnesses',
+    'CODEX · CLAUDE CODE · OPENCODE · OLLAMA',
+    ['Switch harness & model live per agent', 'Real OS binaries on local PATH', 'Zero cloud lock-in or paywalls'],
+    '#32ff85',
+    band(t, 2.2, 0.7)
+  );
+
+  drawCard(
+    1265, 545, 560, 260,
+    'Ducky-Script PTY Engine',
+    'SPAWN → WAIT → STRING+ENTER → STREAM',
+    ['Real pseudo-terminal via pty.openpty()', 'Waits for interactive CLI prompt readiness', 'Streams live ANSI-clean output via SSE'],
+    '#a855f7',
+    band(t, 3.0, 0.7)
+  );
+
+  ctx.restore();
+}
+
+function renderS5(t, dur) {
+  drawBackground(t, '#32ff85');
+  const exit = 1 - easeInOut(band(t, dur - 0.55, 0.55));
+
+  // Ghostbyte 3D in Braille/Amber mode on Right (clear of bento grid)
+  drawGhostCentered(1585, 560, 510, t, {
+    variant: 'amber',
+    yaw: -0.35 + Math.sin(t * 0.7) * 0.3,
+    cursorX: -0.4,
+  });
+
+  ctx.save();
+  ctx.globalAlpha = exit;
+
+  drawPill(90, 74, '04 // REAL-WORLD USE CASES & WORKFLOWS', '#32ff85', easeOut(band(t, 0.05, 0.5)));
+  ctx.fillStyle = '#f8fafc';
+  ctx.font = '800 54px "Syne", system-ui, sans-serif';
+  ctx.textBaseline = 'top';
+  ctx.fillText('Zero to Hero Across Every Engineering Cadre', 90, 138);
+
+  const cases = [
+    {
+      title: '1. Parallel Security Audits',
+      sub: 'SECURITY CADRE (4 NODES)',
+      bullets: ['Spawn 4 isolated scanners simultaneously', 'Zero cloud egress on :8141 loopback'],
+      color: '#fb7185',
+      t0: 0.5,
+    },
+    {
+      title: '2. Multi-Model Consensus',
+      sub: 'AGY OPUS 5.5 VS HERMES-4 405B',
+      bullets: ['Pit frontier models head-to-head', 'Compare architectures in real time'],
+      color: '#ffb800',
+      t0: 1.4,
+    },
+    {
+      title: '3. STDP Memory & Export',
+      sub: 'NEURO-MEMORY (:8094) + MARKDOWN',
+      bullets: ['Reinforce STDP synapses on 21 nodes', '1-click multi-agent transcript export'],
+      color: '#00d5ff',
+      t0: 2.3,
+    },
+    {
+      title: '4. Studio v2 & ZothOS Native',
+      sub: 'WEB WORKSTATION + CLI + GOD-MODE',
+      bullets: ['Unified on :8141 & :3000/tools', 'Pre-installed on ZothOS ISO'],
+      color: '#32ff85',
+      t0: 3.2,
+    },
+  ];
+
+  cases.forEach((c, idx) => {
+    const col = idx % 2;
+    const row = Math.floor(idx / 2);
+    drawCard(
+      90 + col * 610,
+      250 + row * 285,
+      580,
+      255,
+      c.title,
+      c.sub,
+      c.bullets,
+      c.color,
+      band(t, c.t0, 0.7)
+    );
+  });
+
+  ctx.restore();
+}
+
+function renderS6(t, dur) {
+  drawBackground(t, '#ffb800');
+  const pTitle = easeOut(band(t, 0.2, 0.8));
+  const pulse = Math.max(0, 1 - Math.abs(t - 1.2) * 1.2);
+
+  drawGhostCentered(960, 390, 620, t, {
+    variant: 'prism',
+    pulse,
+    yaw: Math.sin(t * 0.9) * 0.45,
+  });
+
+  ctx.save();
+  ctx.globalAlpha = pTitle;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+
+  ctx.fillStyle = '#f8fafc';
+  ctx.font = '800 76px "Syne", system-ui, sans-serif';
+  ctx.fillText('ZOTH SWARM MULTIPLEXER', 960, 710);
+
+  ctx.fillStyle = '#ffb800';
+  ctx.font = '700 30px "JetBrains Mono", monospace';
+  ctx.fillText('21 AUTONOMOUS AGENTS  ·  127.0.0.1:8141  ·  NULLAI.TECH', 960, 810);
+
+  ctx.fillStyle = '#32ff85';
+  ctx.font = '600 24px "JetBrains Mono", monospace';
+  ctx.fillText('100% OPEN-ACCESS  ·  AGY + HERMES AGENT  ·  PTY DUCKY-SCRIPT', 960, 868);
+
+  ctx.restore();
+}
+
+// Transparent overlay HUD with Ghostbyte 3D for compositing over live screen recordings!
+function renderOverlay(t, dur, label, sub, accent) {
+  ctx.clearRect(0, 0, 1920, 1080);
+
+  // Top-right floating Ghostbyte 3D pip
+  const gx = 1710;
+  const gy = 210;
+  ctx.save();
+  roundRect(ctx, gx - 165, gy - 165, 330, 360, 24);
+  ctx.fillStyle = 'rgba(5, 7, 14, 0.86)';
+  ctx.fill();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = accent;
+  ctx.stroke();
+
+  drawGhostCentered(gx, gy - 15, 290, t, {
+    variant: accent === '#ffb800' ? 'amber' : 'hologram',
+    cursorX: -0.5,
+    cursorY: 0.25,
+  });
+
+  ctx.fillStyle = accent;
+  ctx.font = '700 16px "JetBrains Mono", monospace';
+  ctx.textAlign = 'center';
+  ctx.fillText('GHOSTBYTE 3D // HOST', gx, gy + 158);
+  ctx.restore();
+
+  // Bottom-left lower-third callout
+  const p = easeOut(band(t, 0.25, 0.6)) * (1 - easeInOut(band(t, dur - 0.5, 0.5)));
+  ctx.save();
+  ctx.globalAlpha = p;
+  roundRect(ctx, 56, 910, 1420, 116, 18);
+  ctx.fillStyle = 'rgba(5, 7, 14, 0.90)';
+  ctx.fill();
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = accent;
+  ctx.stroke();
+
+  ctx.fillStyle = accent;
+  ctx.font = '700 18px "JetBrains Mono", monospace';
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'top';
+  ctx.fillText(label, 84, 928);
+
+  ctx.fillStyle = '#f8fafc';
+  ctx.font = '700 26px "Syne", system-ui, sans-serif';
+  ctx.fillText(sub, 84, 964);
+  ctx.restore();
+}
+
+window.renderScene = (sceneId, t, dur) => {
+  if (sceneId === 's1') renderS1(t, dur);
+  else if (sceneId === 's2') renderS2(t, dur);
+  else if (sceneId === 's3_ov') renderOverlay(t, dur, '02 // LIVE PTY DUCKY-SCRIPT SPAWN', 'Agy + Hermes Agent -> SPAWN -> WAIT -> STRING+ENTER -> LIVE SSE STREAM', '#00d5ff');
+  else if (sceneId === 's4_ov') renderOverlay(t, dur, '03 // 21-AGENT PARALLEL SWARM BROADCAST', 'Broadcast to All 21 Nodes & Filter by Cadre in Real Time', '#ffb800');
+  else if (sceneId === 's5') renderS5(t, dur);
+  else if (sceneId === 's6') renderS6(t, dur);
+};
+
+// Default frame 0 preview
+window.renderScene('s1', 2.4, 11.0);
+</script>
+</body>
+</html>

@@ -8,7 +8,7 @@
 
 - **Zoth Studio v2 Dossier**: [https://zoth.nullai.tech/tools/zoth-swarm-multiplexer](https://zoth.nullai.tech/tools/zoth-swarm-multiplexer)
 - **Standalone Loopback Daemon**: `http://127.0.0.1:8141`
-- **Support Development**: [https://buy.stripe.com/3cIfZg27PdKo2D64Ocfw40X](https://buy.stripe.com/3cIfZg27PdKo2D64Ocfw40X)
+- **Support Development**: [Buy Us a Coffee (Stripe)](https://buy.stripe.com/3cIfZg27PdKo2D64Ocfw40X) · Solana Tip: `GG2eQbVh8ut1BK6j1A2tz7pSySdLpD38BgyEhGcxdXoK`
 
 ---
 
@@ -166,4 +166,4 @@ gitleaks detect --source . --no-banner --redact
 
 ## License
 
-MIT License. Copyright (c) 2026 1nc0gn30 (`@1nc0gn30`, [https://1nc0gn30.si](https://1nc0gn30.si)) & NullAI ([https://nullai.tech](https://nullai.tech)). See [LICENSE](LICENSE).
+MIT License. Copyright (c) 2026 Neal Frazier Tech (`@1nc0gn30`, [https://github.com/1nc0gn30/zoth-swarm-multiplexer](https://github.com/1nc0gn30/zoth-swarm-multiplexer)) & [NullAI Platform](https://nullai.tech). See [LICENSE](LICENSE).

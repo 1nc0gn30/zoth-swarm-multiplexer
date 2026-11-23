@@ -17,3 +17,14 @@ release-artifacts/
 build/*.iso*
 build/live_workspace/
 build/release-*/
+
+# Showcase render intermediates & heavy media outputs (keep source scripts tracked)
+showcase/out/
+showcase/recordings/
+showcase/narration/
+showcase/frames/
+showcase/*.mp4
+showcase/*.jpg
+*.mov
+*.webm
+
